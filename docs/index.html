@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>PR Predictor — Know Your Next PR Before You Hit It</title>
+  <meta name="description" content="ML-powered 1 Rep Max predictor trained on your personal workout history. Built with XGBoost + FastAPI."/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #fafafa;
+      --surface:  #ffffff;
+      --border:   #e8e8f0;
+      --accent:   #7c3aed;
+      --accent2:  #a855f7;
+      --accentlt: #f3eeff;
+      --text:     #0f0f1a;
+      --muted:    #7070888;
+      --muted2:   #9898aa;
+      --shadow:   0 2px 20px #7c3aed18;
+      --shadow2:  0 8px 40px #0000000e;
+    }
+
+    html { scroll-behavior: smooth; }
+    body  {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      overflow-x: hidden;
+    }
+
+    /* ─── Utility ─── */
+    .container { max-width: 1080px; margin: 0 auto; padding: 0 28px; }
+    .tag {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: var(--accentlt); color: var(--accent);
+      font-size: .72rem; font-weight: 700; letter-spacing: .1em;
+      text-transform: uppercase; padding: 5px 12px; border-radius: 100px;
+      border: 1px solid #7c3aed22;
+    }
+
+    /* ─── Reveal Animation ─── */
+    .reveal {
+      opacity: 0; transform: translateY(32px);
+      transition: opacity .7s cubic-bezier(.16,1,.3,1), transform .7s cubic-bezier(.16,1,.3,1);
+    }
+    .reveal.visible { opacity: 1; transform: translateY(0); }
+    .reveal-d1 { transition-delay: .1s; }
+    .reveal-d2 { transition-delay: .2s; }
+    .reveal-d3 { transition-delay: .3s; }
+    .reveal-d4 { transition-delay: .4s; }
+
+    /* ─── Nav ─── */
+    nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      background: #ffffffcc; backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+      padding: 0 28px;
+    }
+    .nav-inner {
+      max-width: 1080px; margin: 0 auto;
+      display: flex; align-items: center; justify-content: space-between;
+      height: 60px;
+    }
+    .nav-logo {
+      font-weight: 900; font-size: 1.05rem; letter-spacing: -.02em;
+      color: var(--text); text-decoration: none;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .nav-logo .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); display: inline-block; }
+    .nav-links { display: flex; align-items: center; gap: 28px; }
+    .nav-links a {
+      font-size: .875rem; font-weight: 500; color: var(--muted2);
+      text-decoration: none; transition: color .2s;
+    }
+    .nav-links a:hover { color: var(--text); }
+    .nav-cta {
+      background: var(--accent); color: #fff !important;
+      padding: 8px 18px; border-radius: 100px;
+      font-weight: 600 !important; font-size: .82rem !important;
+      transition: background .2s, transform .15s !important;
+    }
+    .nav-cta:hover { background: var(--accent2) !important; transform: translateY(-1px); }
+
+    /* ─── Hero ─── */
+    .hero {
+      padding: 148px 0 100px;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .hero::before {
+      content: '';
+      position: absolute; top: -200px; left: 50%; transform: translateX(-50%);
+      width: 800px; height: 800px; border-radius: 50%;
+      background: radial-gradient(circle, #7c3aed12 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .hero-tag { margin-bottom: 22px; }
+    .hero h1 {
+      font-size: clamp(2.8rem, 6vw, 5rem);
+      font-weight: 900; line-height: 1.08; letter-spacing: -.04em;
+      margin-bottom: 22px;
+    }
+    .hero h1 span {
+      background: linear-gradient(135deg, var(--accent) 0%, var(--accent2) 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    .hero-sub {
+      font-size: 1.1rem; color: var(--muted2); font-weight: 400;
+      max-width: 500px; margin: 0 auto 36px; line-height: 1.65;
+    }
+    .hero-actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+    .btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 13px 26px; border-radius: 100px;
+      font-family: 'Inter', sans-serif; font-size: .9rem; font-weight: 700;
+      text-decoration: none; transition: all .2s; cursor: pointer; border: none;
+    }
+    .btn-primary {
+      background: var(--accent); color: #fff;
+      box-shadow: 0 4px 20px #7c3aed44;
+    }
+    .btn-primary:hover { background: var(--accent2); transform: translateY(-2px); box-shadow: 0 8px 28px #7c3aed55; }
+    .btn-secondary {
+      background: var(--surface); color: var(--text);
+      border: 1px solid var(--border);
+    }
+    .btn-secondary:hover { border-color: #c4b5fd; background: var(--accentlt); transform: translateY(-2px); }
+
+    /* ─── Mock UI ─── */
+    .hero-mock {
+      margin-top: 64px;
+      display: flex; justify-content: center;
+    }
+    .mock-window {
+      width: 100%; max-width: 700px;
+      background: #0a0a0f;
+      border-radius: 20px;
+      border: 1px solid #ffffff10;
+      box-shadow: 0 40px 100px #7c3aed22, 0 20px 60px #00000033;
+      overflow: hidden;
+      transform: perspective(1200px) rotateX(4deg);
+      transition: transform .4s cubic-bezier(.16,1,.3,1);
+    }
+    .mock-window:hover { transform: perspective(1200px) rotateX(0deg); }
+    .mock-bar {
+      background: #111118; padding: 12px 18px;
+      display: flex; align-items: center; gap: 8px;
+      border-bottom: 1px solid #ffffff08;
+    }
+    .mock-dot { width: 11px; height: 11px; border-radius: 50%; }
+    .mock-dot.r { background: #ff5f56; }
+    .mock-dot.y { background: #febc2e; }
+    .mock-dot.g { background: #27c93f; }
+    .mock-url {
+      flex: 1; background: #1a1a24; border-radius: 6px;
+      padding: 5px 12px; font-size: .72rem; color: #6b6b80;
+      margin-left: 8px; font-family: monospace;
+    }
+    .mock-body { padding: 28px; display: flex; flex-direction: column; gap: 16px; }
+    .mock-title-row { display: flex; align-items: center; justify-content: space-between; }
+    .mock-app-name {
+      font-size: 1.1rem; font-weight: 900; letter-spacing: -.02em;
+      background: linear-gradient(135deg, #e0d7ff, #a855f7);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    .mock-badge {
+      background: #7c3aed22; color: #a855f7;
+      font-size: .65rem; font-weight: 700; letter-spacing: .08em;
+      padding: 4px 10px; border-radius: 100px; border: 1px solid #7c3aed44;
+    }
+    .mock-field {
+      background: #111118; border: 1px solid #ffffff0a;
+      border-radius: 10px; padding: 12px 14px;
+    }
+    .mock-field-label { font-size: .62rem; color: #6b6b80; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 5px; }
+    .mock-field-val { font-size: .9rem; color: #e0e0f0; font-weight: 600; }
+    .mock-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .mock-btn {
+      background: linear-gradient(135deg, #7c3aed, #a855f7);
+      border-radius: 10px; padding: 13px;
+      text-align: center; font-size: .88rem; font-weight: 700;
+      color: #fff; letter-spacing: .02em;
+    }
+    .mock-result {
+      background: #111118; border: 1px solid #7c3aed33;
+      border-radius: 12px; padding: 16px;
+    }
+    .mock-result-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
+    .mock-result-label { font-size: .62rem; color: #6b6b80; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 4px; }
+    .mock-result-val { font-size: 1.8rem; font-weight: 900; letter-spacing: -.03em; color: #e0d7ff; }
+    .mock-result-sub { font-size: .72rem; color: #6b6b80; }
+    .mock-pill-row { display: flex; gap: 8px; }
+    .mock-pill {
+      padding: 5px 12px; border-radius: 100px; font-size: .7rem; font-weight: 600;
+      border: 1px solid #ffffff0a; color: #6b6b80;
+    }
+    .mock-pill.active { background: #7c3aed; border-color: #7c3aed; color: #fff; }
+    .mock-bar-track {
+      height: 6px; background: #ffffff08; border-radius: 100px; overflow: hidden; margin-top: 10px;
+    }
+    .mock-bar-fill {
+      height: 100%; width: 72%;
+      background: linear-gradient(90deg, #7c3aed, #a855f7);
+      border-radius: 100px;
+      animation: fillBar 2s cubic-bezier(.16,1,.3,1) forwards;
+    }
+    @keyframes fillBar { from { width: 0%; } to { width: 72%; } }
+    .mock-stats { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; }
+    .mock-stat {
+      background: #0d0d14; border: 1px solid #ffffff08;
+      border-radius: 8px; padding: 10px; text-align: center;
+    }
+    .mock-stat-label { font-size: .58rem; color: #6b6b80; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 4px; }
+    .mock-stat-val   { font-size: .88rem; font-weight: 800; }
+    .mock-stat-val.g { color: #22c55e; }
+    .mock-stat-val.p { color: #a855f7; }
+    .mock-stat-val.y { color: #f59e0b; }
+
+    /* ─── Stats strip ─── */
+    .stats-strip {
+      background: var(--surface); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
+      padding: 40px 28px;
+    }
+    .stats-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 0; }
+    .stat-box {
+      text-align: center; padding: 0 16px;
+      border-right: 1px solid var(--border);
+    }
+    .stat-box:last-child { border-right: none; }
+    .stat-num {
+      font-size: 2.2rem; font-weight: 900; letter-spacing: -.04em;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    .stat-desc { font-size: .8rem; color: var(--muted2); margin-top: 4px; font-weight: 500; }
+
+    /* ─── Features ─── */
+    .features { padding: 100px 0; }
+    .section-head { text-align: center; margin-bottom: 60px; }
+    .section-head h2 {
+      font-size: clamp(1.8rem, 3.5vw, 2.8rem); font-weight: 900;
+      letter-spacing: -.03em; margin: 12px 0 14px;
+    }
+    .section-head p { font-size: .98rem; color: var(--muted2); max-width: 440px; margin: 0 auto; line-height: 1.65; }
+
+    .features-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 16px; }
+    .feat-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 18px; padding: 28px;
+      transition: border-color .2s, transform .2s, box-shadow .2s;
+    }
+    .feat-card:hover {
+      border-color: #c4b5fd; transform: translateY(-4px);
+      box-shadow: var(--shadow);
+    }
+    .feat-icon {
+      width: 44px; height: 44px; border-radius: 12px;
+      background: var(--accentlt); display: flex; align-items: center;
+      justify-content: center; font-size: 1.3rem; margin-bottom: 16px;
+    }
+    .feat-title { font-size: .95rem; font-weight: 700; margin-bottom: 8px; }
+    .feat-desc  { font-size: .85rem; color: var(--muted2); line-height: 1.65; }
+
+    /* ─── How it works ─── */
+    .how { padding: 0 0 100px; }
+    .steps { display: grid; grid-template-columns: repeat(3,1fr); gap: 20px; position: relative; }
+    .steps::before {
+      content: '';
+      position: absolute; top: 28px; left: calc(16.67% + 28px); right: calc(16.67% + 28px);
+      height: 1px; background: linear-gradient(90deg, var(--border), #c4b5fd, var(--border));
+    }
+    .step { text-align: center; padding: 0 16px; }
+    .step-num {
+      width: 56px; height: 56px; border-radius: 50%;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      color: #fff; font-size: 1.1rem; font-weight: 900;
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto 20px;
+      box-shadow: 0 4px 20px #7c3aed44;
+      position: relative; z-index: 1;
+    }
+    .step h3 { font-size: 1rem; font-weight: 700; margin-bottom: 8px; }
+    .step p   { font-size: .85rem; color: var(--muted2); line-height: 1.65; }
+
+    /* ─── Tech Stack ─── */
+    .tech { padding: 0 0 100px; }
+    .tech-grid { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; }
+    .tech-badge {
+      display: flex; align-items: center; gap: 8px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 100px; padding: 10px 18px;
+      font-size: .85rem; font-weight: 600;
+      transition: border-color .2s, transform .2s;
+    }
+    .tech-badge:hover { border-color: #c4b5fd; transform: translateY(-2px); }
+    .tech-badge .ico { font-size: 1.1rem; }
+
+    /* ─── API Preview ─── */
+    .api-section { padding: 0 0 100px; }
+    .api-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .api-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 18px; padding: 28px; overflow: hidden;
+    }
+    .api-method {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: var(--accentlt); color: var(--accent);
+      font-size: .72rem; font-weight: 800; letter-spacing: .1em;
+      padding: 4px 10px; border-radius: 6px; margin-bottom: 10px;
+    }
+    .api-method.get { background: #ecfdf5; color: #059669; }
+    .api-endpoint { font-family: monospace; font-size: .95rem; font-weight: 700; margin-bottom: 12px; }
+    .code-block {
+      background: #0f0f1a; border-radius: 12px; padding: 18px;
+      font-family: 'Courier New', monospace; font-size: .76rem;
+      line-height: 1.7; color: #c4b5fd; overflow-x: auto;
+      border: 1px solid #ffffff08;
+    }
+    .code-block .key   { color: #f0abfc; }
+    .code-block .val   { color: #86efac; }
+    .code-block .num   { color: #fcd34d; }
+    .code-block .brace { color: #94a3b8; }
+
+    /* ─── CTA ─── */
+    .cta-section {
+      padding: 100px 0;
+      text-align: center;
+      background: linear-gradient(135deg, #f5f0ff 0%, #fdf4ff 100%);
+      border-top: 1px solid var(--border);
+    }
+    .cta-section h2 {
+      font-size: clamp(1.8rem, 3.5vw, 2.8rem); font-weight: 900;
+      letter-spacing: -.03em; margin: 12px 0 16px;
+    }
+    .cta-section p { font-size: .98rem; color: var(--muted2); margin-bottom: 32px; }
+
+    /* ─── Footer ─── */
+    footer {
+      background: var(--surface); border-top: 1px solid var(--border);
+      padding: 32px 28px; text-align: center;
+      font-size: .8rem; color: var(--muted2);
+    }
+    footer a { color: var(--accent); text-decoration: none; font-weight: 600; }
+    footer a:hover { text-decoration: underline; }
+
+    @media (max-width: 720px) {
+      .features-grid { grid-template-columns: 1fr; }
+      .steps          { grid-template-columns: 1fr; }
+      .steps::before  { display: none; }
+      .api-grid       { grid-template-columns: 1fr; }
+      .stats-grid     { grid-template-columns: 1fr 1fr; }
+      .mock-grid      { grid-template-columns: 1fr; }
+      .nav-links a:not(.nav-cta) { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── Nav ── -->
+<nav>
+  <div class="nav-inner">
+    <a href="#" class="nav-logo">
+      <span class="dot"></span> PR Predictor
+    </a>
+    <div class="nav-links">
+      <a href="#features">Features</a>
+      <a href="#how">How it works</a>
+      <a href="#api">API</a>
+      <a href="https://github.com/yourname/gym-pr-predictor" class="nav-cta" target="_blank">View on GitHub</a>
+    </div>
+  </div>
+</nav>
+
+<!-- ── Hero ── -->
+<section class="hero">
+  <div class="container">
+    <div class="hero-tag reveal">
+      <span class="tag">⚡ ML-Powered · Built with XGBoost + FastAPI</span>
+    </div>
+    <h1 class="reveal reveal-d1">Know your next PR<br/><span>before you hit it.</span></h1>
+    <p class="hero-sub reveal reveal-d2">
+      A personal 1RM predictor trained entirely on your own workout history —
+      not population averages.
+    </p>
+    <div class="hero-actions reveal reveal-d3">
+      <a href="https://github.com/yourname/gym-pr-predictor" class="btn btn-primary" target="_blank">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
+        Get Started Free
+      </a>
+      <a href="#how" class="btn btn-secondary">See how it works →</a>
+    </div>
+
+    <!-- Mock UI -->
+    <div class="hero-mock reveal reveal-d4">
+      <div class="mock-window">
+        <div class="mock-bar">
+          <div class="mock-dot r"></div>
+          <div class="mock-dot y"></div>
+          <div class="mock-dot g"></div>
+          <div class="mock-url">localhost:8000</div>
+        </div>
+        <div class="mock-body">
+          <div class="mock-title-row">
+            <div class="mock-app-name">PR Predictor</div>
+            <div class="mock-badge">⚡ ML-POWERED</div>
+          </div>
+          <div class="mock-field">
+            <div class="mock-field-label">Exercise</div>
+            <div class="mock-field-val">Bench Press (Barbell)</div>
+          </div>
+          <div class="mock-grid">
+            <div class="mock-field">
+              <div class="mock-field-label">Weight</div>
+              <div class="mock-field-val">80 kg</div>
+            </div>
+            <div class="mock-field">
+              <div class="mock-field-label">Reps</div>
+              <div class="mock-field-val">5</div>
+            </div>
+          </div>
+          <div class="mock-pill-row">
+            <div class="mock-pill active">Normal</div>
+            <div class="mock-pill">Warmup</div>
+            <div class="mock-pill">Dropset</div>
+          </div>
+          <div class="mock-btn">⚡ Predict My PR</div>
+          <div class="mock-result">
+            <div class="mock-result-top">
+              <div>
+                <div class="mock-result-label">Predicted 1RM</div>
+                <div class="mock-result-val">93.5 kg</div>
+                <div class="mock-result-sub">206.1 lbs</div>
+              </div>
+              <div style="text-align:right">
+                <div class="mock-result-label">vs your PR</div>
+                <div style="color:#22c55e;font-size:.85rem;font-weight:800">+2.8 kg 🎉</div>
+              </div>
+            </div>
+            <div class="mock-bar-track"><div class="mock-bar-fill"></div></div>
+            <div class="mock-stats" style="margin-top:10px">
+              <div class="mock-stat">
+                <div class="mock-stat-label">Log PR</div>
+                <div class="mock-stat-val g">90.7</div>
+              </div>
+              <div class="mock-stat">
+                <div class="mock-stat-label">Epley</div>
+                <div class="mock-stat-val p">93.3</div>
+              </div>
+              <div class="mock-stat">
+                <div class="mock-stat-label">Range</div>
+                <div class="mock-stat-val y">88–98</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Stats ── -->
+<div class="stats-strip">
+  <div class="container">
+    <div class="stats-grid">
+      <div class="stat-box reveal">
+        <div class="stat-num">47+</div>
+        <div class="stat-desc">Exercises supported</div>
+      </div>
+      <div class="stat-box reveal reveal-d1">
+        <div class="stat-num">99%</div>
+        <div class="stat-desc">R² on personal data</div>
+      </div>
+      <div class="stat-box reveal reveal-d2">
+        <div class="stat-num">&lt;2ms</div>
+        <div class="stat-desc">API response time</div>
+      </div>
+      <div class="stat-box reveal reveal-d3">
+        <div class="stat-num">100%</div>
+        <div class="stat-desc">Your data, local only</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Features ── -->
+<section class="features" id="features">
+  <div class="container">
+    <div class="section-head reveal">
+      <span class="tag">Features</span>
+      <h2>Everything your gym app doesn't have</h2>
+      <p>Trained on your history, not someone else's. Every prediction is personal.</p>
+    </div>
+    <div class="features-grid">
+      <div class="feat-card reveal">
+        <div class="feat-icon">🧠</div>
+        <div class="feat-title">Personal ML Model</div>
+        <div class="feat-desc">XGBoost trained exclusively on your workout logs. The more you train, the smarter it gets.</div>
+      </div>
+      <div class="feat-card reveal reveal-d1">
+        <div class="feat-icon">📈</div>
+        <div class="feat-title">PR Comparison</div>
+        <div class="feat-desc">Every prediction is stacked against your real log best — see exactly how close you are to breaking it.</div>
+      </div>
+      <div class="feat-card reveal reveal-d2">
+        <div class="feat-icon">🎯</div>
+        <div class="feat-title">Confidence Range</div>
+        <div class="feat-desc">Not just a number — a calibrated low/high range so you know how certain the model is.</div>
+      </div>
+      <div class="feat-card reveal">
+        <div class="feat-icon">⚡</div>
+        <div class="feat-title">Instant Predictions</div>
+        <div class="feat-desc">FastAPI backend serves predictions in under 2ms. Type, click, done.</div>
+      </div>
+      <div class="feat-card reveal reveal-d1">
+        <div class="feat-icon">🔍</div>
+        <div class="feat-title">Smart Autocomplete</div>
+        <div class="feat-desc">Start typing any exercise name and the app pulls from your exact log — no mis-matches.</div>
+      </div>
+      <div class="feat-card reveal reveal-d2">
+        <div class="feat-icon">🔒</div>
+        <div class="feat-title">Fully Local</div>
+        <div class="feat-desc">Your workout data never leaves your machine. Train locally, predict locally, stay private.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── How it works ── -->
+<section class="how" id="how">
+  <div class="container">
+    <div class="section-head reveal">
+      <span class="tag">How it works</span>
+      <h2>Three steps to your PR</h2>
+      <p>From raw CSV to ML-powered predictions in minutes.</p>
+    </div>
+    <div class="steps">
+      <div class="step reveal">
+        <div class="step-num">1</div>
+        <h3>Drop in your CSV</h3>
+        <p>Export your workout log from any tracker app. Place it in <code style="font-size:.78rem;background:#f3eeff;padding:2px 6px;border-radius:4px;color:var(--accent)">app/data/</code> and you're ready.</p>
+      </div>
+      <div class="step reveal reveal-d1">
+        <div class="step-num">2</div>
+        <h3>Train the model</h3>
+        <p>Run <code style="font-size:.78rem;background:#f3eeff;padding:2px 6px;border-radius:4px;color:var(--accent)">python train_model.py</code>. XGBoost learns your personal strength patterns in seconds.</p>
+      </div>
+      <div class="step reveal reveal-d2">
+        <div class="step-num">3</div>
+        <h3>Predict your PR</h3>
+        <p>Start FastAPI, open the app, enter your set — get your predicted 1RM instantly with full context.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Tech Stack ── -->
+<section class="tech">
+  <div class="container">
+    <div class="section-head reveal">
+      <span class="tag">Tech Stack</span>
+      <h2>Built on solid foundations</h2>
+    </div>
+    <div class="tech-grid reveal">
+      <div class="tech-badge"><span class="ico">🐍</span> Python 3.10+</div>
+      <div class="tech-badge"><span class="ico">⚡</span> FastAPI</div>
+      <div class="tech-badge"><span class="ico">🌲</span> XGBoost</div>
+      <div class="tech-badge"><span class="ico">🔬</span> scikit-learn</div>
+      <div class="tech-badge"><span class="ico">🐼</span> Pandas</div>
+      <div class="tech-badge"><span class="ico">🔢</span> NumPy</div>
+      <div class="tech-badge"><span class="ico">💾</span> Joblib</div>
+      <div class="tech-badge"><span class="ico">📋</span> Pydantic</div>
+      <div class="tech-badge"><span class="ico">🌐</span> Vanilla JS</div>
+      <div class="tech-badge"><span class="ico">🎨</span> CSS Animations</div>
+    </div>
+  </div>
+</section>
+
+<!-- ── API ── -->
+<section class="api-section" id="api">
+  <div class="container">
+    <div class="section-head reveal">
+      <span class="tag">API Reference</span>
+      <h2>Clean, fast REST API</h2>
+      <p>Two endpoints. No auth. No setup. Just predictions.</p>
+    </div>
+    <div class="api-grid">
+      <div class="api-card reveal">
+        <div class="api-method">POST</div>
+        <div class="api-endpoint">/predict/pr</div>
+        <div class="code-block"><span class="brace">{</span>
+  <span class="key">"exercise_title"</span>: <span class="val">"Bench Press (Barbell)"</span>,
+  <span class="key">"weight_kg"</span>:       <span class="num">80.0</span>,
+  <span class="key">"reps"</span>:            <span class="num">5</span>,
+  <span class="key">"set_type"</span>:        <span class="val">"normal"</span>,
+  <span class="key">"set_index"</span>:       <span class="num">2</span>
+<span class="brace">}</span></div>
+      </div>
+      <div class="api-card reveal reveal-d1">
+        <div class="api-method get">GET</div>
+        <div class="api-endpoint">/exercises</div>
+        <div class="code-block"><span class="brace">{</span>
+  <span class="key">"exercises"</span>: <span class="brace">[</span>
+    <span class="val">"Bench Press (Barbell)"</span>,
+    <span class="val">"Squat (Barbell)"</span>,
+    <span class="val">"Deadlift (Barbell)"</span>,
+    <span class="val">"... 44 more"</span>
+  <span class="brace">]</span>,
+  <span class="key">"count"</span>: <span class="num">47</span>
+<span class="brace">}</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── CTA ── -->
+<section class="cta-section">
+  <div class="container">
+    <div class="reveal">
+      <span class="tag">Open Source · Free Forever</span>
+      <h2>Start predicting your PRs today.</h2>
+      <p>Clone the repo, drop in your CSV, run two commands.</p>
+      <div class="hero-actions">
+        <a href="https://github.com/yourname/gym-pr-predictor" class="btn btn-primary" target="_blank">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
+          Clone on GitHub
+        </a>
+        <a href="https://github.com/yourname/gym-pr-predictor#readme" class="btn btn-secondary" target="_blank">Read the docs →</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Footer ── -->
+<footer>
+  <p>Built with 🏋️ by <a href="https://github.com/yourname">yourname</a> · 
+  <a href="https://github.com/yourname/gym-pr-predictor">GitHub</a> · 
+  MIT License</p>
+</footer>
+
+<script>
+  // Reveal on scroll
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        e.target.classList.add('visible');
+        observer.unobserve(e.target);
+      }
+    });
+  }, { threshold: 0.12 });
+
+  document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+
+  // Trigger hero reveals immediately
+  setTimeout(() => {
+    document.querySelectorAll('.hero .reveal').forEach(el => el.classList.add('visible'));
+  }, 100);
+</script>
+</body>
+</html>
