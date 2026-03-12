@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>PR Predictor</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0a0a0f;
+      --surface:   #111118;
+      --card:      #16161f;
+      --border:    #ffffff0f;
+      --accent:    #7c3aed;
+      --accent2:   #a855f7;
+      --glow:      #7c3aed55;
+      --text:      #f0f0f8;
+      --muted:     #6b6b80;
+      --success:   #22c55e;
+      --warning:   #f59e0b;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ── Animated BG ── */
+    .bg-orbs {
+      position: fixed; inset: 0; pointer-events: none; z-index: 0;
+      overflow: hidden;
+    }
+    .orb {
+      position: absolute; border-radius: 50%; filter: blur(120px); opacity: 0.18;
+      animation: drift 18s ease-in-out infinite;
+    }
+    .orb1 { width:600px; height:600px; background:#7c3aed; top:-200px; left:-200px; animation-delay:0s; }
+    .orb2 { width:400px; height:400px; background:#a855f7; bottom:-100px; right:-100px; animation-delay:-9s; }
+    .orb3 { width:300px; height:300px; background:#6366f1; top:40%; left:50%; animation-delay:-5s; }
+
+    @keyframes drift {
+      0%,100% { transform: translate(0,0) scale(1); }
+      33%      { transform: translate(40px,-30px) scale(1.05); }
+      66%      { transform: translate(-20px,20px) scale(0.95); }
+    }
+
+    /* ── Layout ── */
+    .container {
+      position: relative; z-index: 1;
+      max-width: 860px; margin: 0 auto;
+      padding: 0 24px 80px;
+    }
+
+    /* ── Header ── */
+    header {
+      text-align: center;
+      padding: 64px 0 48px;
+    }
+    .badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: #7c3aed22; border: 1px solid #7c3aed44;
+      color: var(--accent2); font-size: 12px; font-weight: 600;
+      letter-spacing: .08em; text-transform: uppercase;
+      padding: 6px 14px; border-radius: 100px; margin-bottom: 20px;
+    }
+    .badge svg { width: 14px; height: 14px; }
+    h1 {
+      font-size: clamp(2.4rem, 5vw, 3.6rem);
+      font-weight: 900; line-height: 1.1; letter-spacing: -.03em;
+      background: linear-gradient(135deg, #e0d7ff 0%, #a855f7 50%, #7c3aed 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      margin-bottom: 14px;
+    }
+    .subtitle {
+      color: var(--muted); font-size: 1rem; font-weight: 400; max-width: 440px; margin: 0 auto;
+    }
+
+    /* ── Card ── */
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 32px;
+      margin-bottom: 20px;
+      backdrop-filter: blur(20px);
+      transition: border-color .25s;
+    }
+    .card:hover { border-color: #ffffff18; }
+    .card-title {
+      font-size: .7rem; font-weight: 700; letter-spacing: .1em;
+      text-transform: uppercase; color: var(--muted); margin-bottom: 20px;
+    }
+
+    /* ── Form Grid ── */
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .form-group { display: flex; flex-direction: column; gap: 8px; }
+    .form-group.full { grid-column: 1 / -1; }
+
+    label {
+      font-size: .8rem; font-weight: 600; color: var(--muted);
+      letter-spacing: .04em; text-transform: uppercase;
+    }
+
+    .input-wrap { position: relative; }
+    input[type="text"], input[type="number"], select {
+      width: 100%;
+      background: #0d0d14;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      color: var(--text);
+      font-family: 'Inter', sans-serif;
+      font-size: .95rem;
+      font-weight: 500;
+      padding: 13px 16px;
+      outline: none;
+      transition: border-color .2s, box-shadow .2s;
+      -webkit-appearance: none;
+    }
+    input:focus, select:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--glow);
+    }
+    select { cursor: pointer; }
+    select option { background: #1a1a24; }
+
+    /* Number inputs with +/- buttons */
+    .num-wrap { display: flex; align-items: center; gap: 0; }
+    .num-btn {
+      background: #1a1a24; border: 1px solid var(--border);
+      color: var(--text); font-size: 1.1rem; font-weight: 700;
+      width: 42px; min-width: 42px; height: 46px;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; transition: background .15s;
+      user-select: none;
+    }
+    .num-btn:first-child { border-radius: 12px 0 0 12px; border-right: 0; }
+    .num-btn:last-child  { border-radius: 0 12px 12px 0; border-left: 0; }
+    .num-btn:hover { background: #252535; }
+    .num-wrap input {
+      border-radius: 0; border-left: 0; border-right: 0;
+      text-align: center; width: 80px; min-width: 0;
+    }
+
+    /* Autocomplete */
+    .autocomplete-list {
+      position: absolute; top: calc(100% + 6px); left: 0; right: 0;
+      background: #1a1a24; border: 1px solid var(--border);
+      border-radius: 12px; max-height: 220px; overflow-y: auto;
+      z-index: 100; display: none;
+      box-shadow: 0 20px 60px #00000088;
+    }
+    .autocomplete-list.show { display: block; }
+    .autocomplete-item {
+      padding: 10px 14px; font-size: .88rem; cursor: pointer;
+      transition: background .12s; color: var(--text);
+    }
+    .autocomplete-item:hover, .autocomplete-item.active {
+      background: var(--accent);
+    }
+    .autocomplete-item mark {
+      background: transparent; color: #c084fc; font-weight: 700;
+    }
+
+    /* Set type pills */
+    .pill-group { display: flex; gap: 8px; flex-wrap: wrap; }
+    .pill {
+      padding: 8px 18px; border-radius: 100px; font-size: .82rem;
+      font-weight: 600; cursor: pointer; border: 1px solid var(--border);
+      background: transparent; color: var(--muted);
+      transition: all .2s;
+    }
+    .pill.active, .pill:hover {
+      background: var(--accent); border-color: var(--accent);
+      color: #fff; box-shadow: 0 0 16px var(--glow);
+    }
+
+    /* ── Predict Button ── */
+    .predict-btn {
+      width: 100%; padding: 16px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      border: none; border-radius: 14px;
+      color: #fff; font-family: 'Inter', sans-serif;
+      font-size: 1rem; font-weight: 700; letter-spacing: .02em;
+      cursor: pointer; margin-top: 8px;
+      position: relative; overflow: hidden;
+      transition: transform .15s, box-shadow .2s;
+      box-shadow: 0 4px 30px var(--glow);
+    }
+    .predict-btn::before {
+      content: ''; position: absolute; inset: 0;
+      background: linear-gradient(135deg, #ffffff22, transparent);
+      opacity: 0; transition: opacity .2s;
+    }
+    .predict-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 40px var(--glow); }
+    .predict-btn:hover::before { opacity: 1; }
+    .predict-btn:active { transform: translateY(0); }
+    .predict-btn.loading { pointer-events: none; opacity: .8; }
+    .predict-btn .btn-inner { display: flex; align-items: center; justify-content: center; gap: 10px; }
+    .spinner {
+      width: 18px; height: 18px; border: 2px solid #ffffff44;
+      border-top-color: #fff; border-radius: 50%;
+      animation: spin .6s linear infinite; display: none;
+    }
+    .predict-btn.loading .spinner  { display: block; }
+    .predict-btn.loading .btn-text { opacity: .7; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Results ── */
+    #results { display: none; animation: slideUp .4s cubic-bezier(.16,1,.3,1); }
+    @keyframes slideUp {
+      from { opacity: 0; transform: translateY(24px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .result-hero {
+      text-align: center; padding: 8px 0 24px;
+    }
+    .result-exercise {
+      font-size: .78rem; font-weight: 700; color: var(--muted);
+      letter-spacing: .1em; text-transform: uppercase; margin-bottom: 8px;
+    }
+    .result-1rm {
+      font-size: clamp(3rem, 8vw, 5rem); font-weight: 900;
+      letter-spacing: -.04em; line-height: 1;
+      background: linear-gradient(135deg, #fff 0%, #c084fc 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    .result-unit { font-size: 1.2rem; font-weight: 600; color: var(--muted); margin-top: 4px; }
+    .result-lbs  { font-size: .9rem; color: var(--muted); margin-top: 4px; }
+
+    /* Gauge bar */
+    .gauge-wrap { margin: 20px 0; }
+    .gauge-labels {
+      display: flex; justify-content: space-between;
+      font-size: .72rem; color: var(--muted); margin-bottom: 6px;
+    }
+    .gauge-track {
+      height: 8px; background: #ffffff0a; border-radius: 100px; overflow: hidden;
+    }
+    .gauge-fill {
+      height: 100%; width: 0%;
+      background: linear-gradient(90deg, var(--accent), var(--accent2));
+      border-radius: 100px;
+      transition: width 1s cubic-bezier(.16,1,.3,1);
+      box-shadow: 0 0 12px var(--glow);
+    }
+
+    /* Stats row */
+    .stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 8px; }
+    .stat-item {
+      background: #0d0d14; border: 1px solid var(--border);
+      border-radius: 14px; padding: 16px; text-align: center;
+    }
+    .stat-label { font-size: .68rem; font-weight: 700; color: var(--muted); letter-spacing: .08em; text-transform: uppercase; margin-bottom: 6px; }
+    .stat-value { font-size: 1.2rem; font-weight: 800; }
+    .stat-value.pr    { color: var(--success); }
+    .stat-value.epley { color: var(--accent2); }
+    .stat-value.conf  { color: var(--warning); }
+
+    /* PR comparison banner */
+    .pr-banner {
+      display: none; margin-top: 16px;
+      padding: 14px 18px; border-radius: 14px;
+      font-size: .88rem; font-weight: 600;
+      align-items: center; gap: 10px;
+    }
+    .pr-banner.above { background: #22c55e18; border: 1px solid #22c55e33; color: #86efac; display: flex; }
+    .pr-banner.below { background: #f59e0b18; border: 1px solid #f59e0b33; color: #fcd34d; display: flex; }
+
+    /* Error */
+    .error-box {
+      display: none; background: #ef444418; border: 1px solid #ef444433;
+      border-radius: 14px; padding: 14px 18px;
+      color: #fca5a5; font-size: .88rem; margin-top: 12px;
+      align-items: center; gap: 10px;
+    }
+    .error-box.show { display: flex; }
+
+    /* ── Recent ── */
+    #history-section { display: none; }
+    .history-list { display: flex; flex-direction: column; gap: 10px; }
+    .history-item {
+      display: flex; align-items: center; justify-content: space-between;
+      background: #0d0d14; border: 1px solid var(--border);
+      border-radius: 12px; padding: 12px 16px;
+      font-size: .88rem; cursor: pointer;
+      transition: border-color .15s, background .15s;
+    }
+    .history-item:hover { border-color: #ffffff22; background: #13131c; }
+    .hi-exercise { font-weight: 600; }
+    .hi-detail   { color: var(--muted); font-size: .8rem; margin-top: 2px; }
+    .hi-result   { font-weight: 800; color: var(--accent2); font-size: 1rem; }
+
+    /* Footer */
+    footer {
+      text-align: center; padding: 40px 0 0;
+      color: var(--muted); font-size: .78rem;
+    }
+    footer a { color: var(--accent2); text-decoration: none; }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+
+    @media (max-width: 560px) {
+      .form-grid { grid-template-columns: 1fr; }
+      .stats-row { grid-template-columns: 1fr; }
+      .card { padding: 20px; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="bg-orbs">
+  <div class="orb orb1"></div>
+  <div class="orb orb2"></div>
+  <div class="orb orb3"></div>
+</div>
+
+<div class="container">
+
+  <!-- Header -->
+  <header>
+    <div class="badge">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+      </svg>
+      ML-Powered
+    </div>
+    <h1>PR Predictor</h1>
+    <p class="subtitle">Enter your lift data and see your predicted 1 Rep Max using your own workout history.</p>
+  </header>
+
+  <!-- Input Card -->
+  <div class="card">
+    <div class="card-title">Your Lift</div>
+    <div class="form-grid">
+
+      <!-- Exercise -->
+      <div class="form-group full">
+        <label>Exercise</label>
+        <div class="input-wrap">
+          <input type="text" id="exercise-input" placeholder="e.g. Bench Press (Barbell)" autocomplete="off"/>
+          <div class="autocomplete-list" id="autocomplete-list"></div>
+        </div>
+      </div>
+
+      <!-- Weight -->
+      <div class="form-group">
+        <label>Weight (kg)</label>
+        <div class="num-wrap">
+          <div class="num-btn" onclick="adjustNum('weight', -2.5)">−</div>
+          <input type="number" id="weight" value="80" min="1" max="500" step="2.5"/>
+          <div class="num-btn" onclick="adjustNum('weight', 2.5)">+</div>
+        </div>
+      </div>
+
+      <!-- Reps -->
+      <div class="form-group">
+        <label>Reps</label>
+        <div class="num-wrap">
+          <div class="num-btn" onclick="adjustNum('reps', -1)">−</div>
+          <input type="number" id="reps" value="5" min="1" max="50"/>
+          <div class="num-btn" onclick="adjustNum('reps', 1)">+</div>
+        </div>
+      </div>
+
+      <!-- Set Index -->
+      <div class="form-group">
+        <label>Set Number</label>
+        <div class="num-wrap">
+          <div class="num-btn" onclick="adjustNum('set_index', -1)">−</div>
+          <input type="number" id="set_index" value="0" min="0" max="20"/>
+          <div class="num-btn" onclick="adjustNum('set_index', 1)">+</div>
+        </div>
+      </div>
+
+      <!-- Set Type -->
+      <div class="form-group">
+        <label>Set Type</label>
+        <div class="pill-group" id="set-type-group">
+          <div class="pill active" data-value="normal">Normal</div>
+          <div class="pill" data-value="warmup">Warmup</div>
+          <div class="pill" data-value="dropset">Dropset</div>
+        </div>
+      </div>
+
+    </div>
+
+    <button class="predict-btn" id="predict-btn" onclick="predict()">
+      <div class="btn-inner">
+        <div class="spinner"></div>
+        <span class="btn-text">⚡ Predict My PR</span>
+      </div>
+    </button>
+
+    <div class="error-box" id="error-box">
+      <span>⚠️</span>
+      <span id="error-msg">Something went wrong.</span>
+    </div>
+  </div>
+
+  <!-- Results Card -->
+  <div class="card" id="results">
+    <div class="card-title">Prediction Result</div>
+
+    <div class="result-hero">
+      <div class="result-exercise" id="res-exercise">—</div>
+      <div class="result-1rm" id="res-1rm">—</div>
+      <div class="result-unit">kg · Predicted 1RM</div>
+      <div class="result-lbs" id="res-lbs">—</div>
+    </div>
+
+    <div class="gauge-wrap">
+      <div class="gauge-labels">
+        <span id="gauge-low">—</span>
+        <span style="color:var(--text);font-weight:700" id="gauge-mid">—</span>
+        <span id="gauge-high">—</span>
+      </div>
+      <div class="gauge-track"><div class="gauge-fill" id="gauge-fill"></div></div>
+      <div class="gauge-labels" style="margin-top:4px">
+        <span>Low</span><span>Confidence Range</span><span>High</span>
+      </div>
+    </div>
+
+    <div class="stats-row">
+      <div class="stat-item">
+        <div class="stat-label">Personal Best</div>
+        <div class="stat-value pr" id="res-pb">—</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-label">Epley Formula</div>
+        <div class="stat-value epley" id="res-epley">—</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-label">Confidence</div>
+        <div class="stat-value conf" id="res-conf">—</div>
+      </div>
+    </div>
+
+    <div class="pr-banner" id="pr-banner">
+      <span id="pr-banner-icon">🎉</span>
+      <span id="pr-banner-msg">—</span>
+    </div>
+  </div>
+
+  <!-- History -->
+  <div id="history-section">
+    <div class="card">
+      <div class="card-title">Recent Predictions</div>
+      <div class="history-list" id="history-list"></div>
+    </div>
+  </div>
+
+  <footer>Built with FastAPI + XGBoost · <a href="/docs" target="_blank">API Docs ↗</a></footer>
+
+</div>
+
+<script>
+  const API = 'http://localhost:8000';
+  let exercises = [];
+  let selectedSetType = 'normal';
+  let history = JSON.parse(localStorage.getItem('pr_history') || '[]');
+
+  // ── Fetch exercise list on load ──
+  async function loadExercises() {
+    try {
+      const r = await fetch(`${API}/exercises`);
+      const d = await r.json();
+      exercises = d.exercises || [];
+    } catch { exercises = []; }
+  }
+  loadExercises();
+  renderHistory();
+
+  // ── Autocomplete ──
+  const exInput  = document.getElementById('exercise-input');
+  const acList   = document.getElementById('autocomplete-list');
+  let acIndex    = -1;
+
+  exInput.addEventListener('input', () => {
+    const q = exInput.value.trim().toLowerCase();
+    if (!q) { acList.classList.remove('show'); return; }
+    const matches = exercises.filter(e => e.toLowerCase().includes(q)).slice(0, 8);
+    if (!matches.length) { acList.classList.remove('show'); return; }
+    acList.innerHTML = matches.map(e => {
+  const hi = e.replace(new RegExp(`(${q})`, 'gi'), '<mark>$1</mark>');
+  return `<div class="autocomplete-item" data-value="${e}">${hi}</div>`;
+}).join('');
+
+// Attach mousedown (fires BEFORE blur, so list doesn't vanish first)
+acList.querySelectorAll('.autocomplete-item').forEach(item => {
+  item.addEventListener('mousedown', (e) => {
+    e.preventDefault(); // prevents input blur
+    selectExercise(item.dataset.value);
+  });
+});
+
+    acList.classList.add('show');
+    acIndex = -1;
+  });
+
+  exInput.addEventListener('keydown', e => {
+    const items = acList.querySelectorAll('.autocomplete-item');
+    if (e.key === 'ArrowDown') { acIndex = Math.min(acIndex+1, items.length-1); highlight(items); e.preventDefault(); }
+    if (e.key === 'ArrowUp')   { acIndex = Math.max(acIndex-1, 0); highlight(items); e.preventDefault(); }
+    if (e.key === 'Enter' && acIndex >= 0) { items[acIndex].click(); }
+    if (e.key === 'Escape') { acList.classList.remove('show'); }
+  });
+
+  function highlight(items) {
+    items.forEach((it,i) => it.classList.toggle('active', i === acIndex));
+    if (items[acIndex]) items[acIndex].scrollIntoView({block:'nearest'});
+  }
+
+  function selectExercise(name) {
+    exInput.value = name;
+    acList.classList.remove('show');
+    acIndex = -1;
+  }
+
+// Use blur instead — fires after mousedown selection is already done
+exInput.addEventListener('blur', () => {
+  setTimeout(() => acList.classList.remove('show'), 150);
+});
+
+
+  // ── Set type pills ──
+  document.querySelectorAll('.pill').forEach(p => {
+    p.addEventListener('click', () => {
+      document.querySelectorAll('.pill').forEach(x => x.classList.remove('active'));
+      p.classList.add('active');
+      selectedSetType = p.dataset.value;
+    });
+  });
+
+  // ── +/- buttons ──
+  function adjustNum(id, delta) {
+    const inp = document.getElementById(id);
+    const min = parseFloat(inp.min) || 0;
+    const max = parseFloat(inp.max) || 9999;
+    const val = Math.min(max, Math.max(min, parseFloat(inp.value || 0) + delta));
+    inp.value = Math.round(val * 10) / 10;
+  }
+
+  // ── Predict ──
+  async function predict() {
+    const exercise = exInput.value.trim();
+    const weight   = parseFloat(document.getElementById('weight').value);
+    const reps     = parseInt(document.getElementById('reps').value);
+    const setIdx   = parseInt(document.getElementById('set_index').value);
+
+    if (!exercise) { showError('Please enter an exercise name.'); return; }
+    if (!weight || weight <= 0) { showError('Please enter a valid weight.'); return; }
+    if (!reps || reps < 1)     { showError('Please enter valid reps (min 1).'); return; }
+
+    hideError();
+    setLoading(true);
+
+    try {
+      const r = await fetch(`${API}/predict/pr`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          exercise_title: exercise,
+          weight_kg:  weight,
+          reps:       reps,
+          set_type:   selectedSetType,
+          set_index:  setIdx
+        })
+      });
+
+      if (!r.ok) {
+        const e = await r.json();
+        throw new Error(e.detail || 'API error');
+      }
+
+      const d = await r.json();
+      showResults(d);
+      addHistory(d, weight, reps);
+
+    } catch (err) {
+      showError(err.message || 'Could not connect to API. Is FastAPI running?');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function showResults(d) {
+    document.getElementById('results').style.display = 'block';
+    document.getElementById('res-exercise').textContent = d.exercise_title;
+    document.getElementById('res-1rm').textContent      = d.predicted_1rm_kg.toFixed(1);
+    document.getElementById('res-lbs').textContent      = `${d.predicted_1rm_lbs.toFixed(1)} lbs`;
+    document.getElementById('res-epley').textContent    = `${d.epley_estimate_kg.toFixed(1)} kg`;
+    document.getElementById('res-conf').textContent     = `${d.confidence_range.low}–${d.confidence_range.high}`;
+
+    const pb = d.personal_best_kg;
+    document.getElementById('res-pb').textContent = pb ? `${pb.toFixed(1)} kg` : 'N/A';
+
+    // Gauge: fill relative to confidence range
+    const low = d.confidence_range.low, high = d.confidence_range.high;
+    document.getElementById('gauge-low').textContent  = `${low} kg`;
+    document.getElementById('gauge-mid').textContent  = `${d.predicted_1rm_kg.toFixed(1)} kg`;
+    document.getElementById('gauge-high').textContent = `${high} kg`;
+    const fillPct = Math.min(92, Math.max(20, 60 + (d.predicted_1rm_kg - pb) / pb * 80));
+    setTimeout(() => { document.getElementById('gauge-fill').style.width = fillPct + '%'; }, 50);
+
+    // PR banner
+    const banner = document.getElementById('pr-banner');
+    if (pb) {
+      if (d.predicted_1rm_kg > pb) {
+        banner.className = 'pr-banner above';
+        document.getElementById('pr-banner-icon').textContent = '🎉';
+        document.getElementById('pr-banner-msg').textContent  = `This set predicts a new PR — ${(d.predicted_1rm_kg - pb).toFixed(1)} kg above your log best!`;
+      } else {
+        banner.className = 'pr-banner below';
+        document.getElementById('pr-banner-icon').textContent = '📈';
+        document.getElementById('pr-banner-msg').textContent  = `${(pb - d.predicted_1rm_kg).toFixed(1)} kg below your log PR. Keep pushing!`;
+      }
+    } else {
+      banner.className = 'pr-banner';
+    }
+
+    document.getElementById('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  // ── History ──
+  function addHistory(d, weight, reps) {
+    history.unshift({ exercise: d.exercise_title, weight, reps, pr: d.predicted_1rm_kg, ts: Date.now() });
+    if (history.length > 10) history.pop();
+    localStorage.setItem('pr_history', JSON.stringify(history));
+    renderHistory();
+  }
+
+  function renderHistory() {
+    if (!history.length) return;
+    document.getElementById('history-section').style.display = 'block';
+    document.getElementById('history-list').innerHTML = history.map(h => `
+      <div class="history-item" onclick="loadHistory('${h.exercise.replace(/'/g,"\'")}', ${h.weight}, ${h.reps})">
+        <div>
+          <div class="hi-exercise">${h.exercise}</div>
+          <div class="hi-detail">${h.weight} kg × ${h.reps} reps · ${timeAgo(h.ts)}</div>
+        </div>
+        <div class="hi-result">${h.pr.toFixed(1)} kg</div>
+      </div>`).join('');
+  }
+
+  function loadHistory(exercise, weight, reps) {
+    exInput.value = exercise;
+    document.getElementById('weight').value = weight;
+    document.getElementById('reps').value   = reps;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function timeAgo(ts) {
+    const d = (Date.now() - ts) / 1000;
+    if (d < 60) return 'just now';
+    if (d < 3600) return `${Math.floor(d/60)}m ago`;
+    if (d < 86400) return `${Math.floor(d/3600)}h ago`;
+    return `${Math.floor(d/86400)}d ago`;
+  }
+
+  // ── Helpers ──
+  function setLoading(on) {
+    const btn = document.getElementById('predict-btn');
+    btn.classList.toggle('loading', on);
+  }
+
+  function showError(msg) {
+    const box = document.getElementById('error-box');
+    document.getElementById('error-msg').textContent = msg;
+    box.classList.add('show');
+  }
+
+  function hideError() {
+    document.getElementById('error-box').classList.remove('show');
+  }
+</script>
+</body>
+</html>
