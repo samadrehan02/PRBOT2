@@ -1,6 +1,8 @@
 
 # 🏋️ Gym PR Predictor
 
+https://samadrehan02.github.io/PRBOT2/
+
 A machine learning app that predicts your **1 Rep Max (1RM)** for any exercise — trained entirely on **your own workout history**. Built with XGBoost, served via FastAPI, and wrapped in a sleek dark-mode frontend.
 
 ---
